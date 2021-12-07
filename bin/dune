@@ -1,0 +1,4 @@
+(executable
+ (public_name solo5_elftool)
+ (name main)
+ (libraries solo5_elftool owee cstruct cmdliner))
