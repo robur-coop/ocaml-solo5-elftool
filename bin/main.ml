@@ -1,8 +1,10 @@
 let hex_dump file =
   Owee_buf.map_binary file
   |> Solo5_elftool.foo
-  |> Result.iter (fun s ->
-      Cstruct.of_string s |> Cstruct.hexdump)
+  |> Result.iter (fun mft ->
+      Fmt.pr "%d elements\n" (List.length mft);
+      Fmt.pr "%a\n" Fmt.(append (any "[") (append (list ~sep:(any ",\n") Solo5_elftool.pp_mft_entry) (any "]")))
+        mft)
 
 let file =
   let doc = "Solo5 executable" in

@@ -1,3 +1,4 @@
 (library
  (name solo5_elftool)
- (libraries owee))
+ (libraries owee cstruct
+            fmt))
