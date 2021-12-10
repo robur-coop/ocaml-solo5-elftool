@@ -18,22 +18,28 @@ type mft_entry =
   | Reserved_first
   | Dev_block_basic of {
       name : string;
-      capacity : int64; (* uint64_t *)
-      block_size : int; (* uint16_t *)
     }
   | Dev_net_basic of {
       name : string;
-      mac : string; (* uint8_t[8] *)
-      mtu : int; (* uint16_t *)
     }
+
+type mft = {
+  version : int;
+  entries : mft_entry array;
+}
 
 let pp_mft_entry ppf = function
   | Reserved_first ->
     Fmt.pf ppf "MFT_RESERVED_FIRST"
   | Dev_block_basic { name; _ } ->
-    Fmt.pf ppf {|{ "name": %S, "type": "BLOCK_BASIC" }|} name
+    Fmt.pf ppf {|{@[<1>@ "name": %S,@ "type": "BLOCK_BASIC"@]@ }|} name
   | Dev_net_basic { name; _ } ->
-    Fmt.pf ppf {|{ "name": %S, "type": "NET_BASIC" }|} name
+    Fmt.pf ppf {|{@[<1>@ "name": %S,@ "type": "NET_BASIC"@]@ }|} name
+
+let pp_mft ppf { version; entries } =
+  Fmt.pf ppf
+    {|{@[<1>@ "type": "solo5.manifest",@ "version": %d,@ "devices": [@[<1>@ %a@]@ ]@]@ }|}
+    version Fmt.(array ~sep:(append (any ",") sp) pp_mft_entry) entries
 
 let sizeof_mft_entry = 104
 
@@ -48,24 +54,19 @@ let parse_mft_entry buf =
     Cstruct.cut ~sep:(Cstruct.create 1) name_raw
     |> Option.map (fun (name, _) -> Cstruct.to_string name)
   in
+  assert (Cstruct.for_all ((=) '\000') u);
+  assert (Cstruct.for_all ((=) '\000') b);
   assert (not attached);
   match mft_type_of_int typ with
   | Reserved_first ->
     assert (Cstruct.for_all ((=) '\000') name_raw);
-    assert (Cstruct.for_all ((=) '\000') u);
-    assert (Cstruct.for_all ((=) '\000') b);
-    assert (not attached);
     Reserved_first
   | Dev_block_basic ->
-    let capacity = Cstruct.LE.get_uint64 u 0 in
-    let block_size = Cstruct.LE.get_uint16 u 8 in
     let name = Option.get name in
-    Dev_block_basic { name; capacity; block_size }
+    Dev_block_basic { name; }
   | Dev_net_basic ->
-    let mac = Cstruct.to_string u ~off:0 ~len:6 in
-    let mtu = Cstruct.LE.get_uint16 u 6 in
     let name = Option.get name in
-    Dev_net_basic { name; mac; mtu }
+    Dev_net_basic { name; }
 
 let parse_mft buf =
   let buf = Cstruct.of_string buf in
@@ -78,10 +79,10 @@ let parse_mft buf =
   let buf = Cstruct.shift buf 8 in
   Printf.printf "MFT%ld[%ld]\n" version entries;
   let entries =
-    List.init (Int32.unsigned_to_int entries |> Option.get (* XXX: assume 64 bit *))
+    Array.init (Int32.unsigned_to_int entries |> Option.get (* XXX: assume 64 bit *))
       (fun i -> parse_mft_entry (Cstruct.sub buf (i * sizeof_mft_entry) sizeof_mft_entry))
   in
-  entries
+  { version = Int32.to_int version; entries }
 
 let ( let* ) = Result.bind
 
