@@ -1,0 +1,33 @@
+opam-version: "2.0"
+homepage: "https://git.robur.io/robur/ocaml-solo5-elftool"
+dev-repo: "git+https://git.robur.io/robur/ocaml-solo5-elftool.git"
+bug-reports: "https://github.com/roburio/ocaml-solo5-elftool/issues"
+doc: "https://roburio.github.io/ocaml-solo5-elftool/doc"
+maintainer: [ "team@robur.coop" ]
+authors: [ "Reynir Björnsson <reynir@reynir.dk>" ]
+license: "BSD-2-Clause"
+
+build: [
+  ["dune" "subst"] {dev}
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {wiht-test}
+]
+
+depends: [
+  "ocaml"
+  "dune" {>= "2.9"}
+  "owee"
+  "cstruct"
+  "fmt"
+  "cmdliner"
+]
+
+pin-depends: [
+  ["owee.dev" "git+https://github.com/let-def/owee.git"]
+]
+
+synopsis: "OCaml Solo5 elftool for querying solo5 manifests"
+description: """
+OCaml Solo5 elftool is a library and executable for reading solo5 device
+manifests from solo5 ELF executables.
+"""
