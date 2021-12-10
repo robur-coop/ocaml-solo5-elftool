@@ -77,7 +77,6 @@ let parse_mft buf =
   in
   assert (version = 1l);
   let buf = Cstruct.shift buf 8 in
-  Printf.printf "MFT%ld[%ld]\n" version entries;
   let entries =
     Array.init (Int32.unsigned_to_int entries |> Option.get (* XXX: assume 64 bit *))
       (fun i -> parse_mft_entry (Cstruct.sub buf (i * sizeof_mft_entry) sizeof_mft_entry))
@@ -89,7 +88,7 @@ let ( let* ) = Result.bind
 let mft_max_entries = 64
 let mft1_note_name = "Solo5"
 
-let foo buf =
+let query_manifest buf =
   let _header, sections = Owee_elf.read_elf buf in
   let* section =
     Owee_elf.find_section sections ".note.solo5.manifest"
@@ -100,7 +99,7 @@ let foo buf =
   let descsz =
     Owee_elf_notes.read_desc_size cursor
       ~expected_owner:mft1_note_name
-      ~expected_type:0x3154464d
+      ~expected_type:0x3154464d (* MFT1 *)
   in
   let desc = Owee_buf.Read.fixed_string cursor descsz in
   assert (Owee_buf.at_end cursor);

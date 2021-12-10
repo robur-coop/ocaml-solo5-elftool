@@ -1,6 +1,6 @@
-let hex_dump file =
+let query_manifest file =
   Owee_buf.map_binary file
-  |> Solo5_elftool.foo
+  |> Solo5_elftool.query_manifest
   |> Result.iter (fun mft ->
       Fmt.pr "%a\n" Solo5_elftool.pp_mft mft)
 
@@ -9,11 +9,11 @@ let file =
   Cmdliner.Arg.(required & pos 0 (some file) None &
                 info ~doc ~docv:"EXECUTABLE" [])
 
-let hex_dump_cmd =
-  let doc = "hexdump solo5 manifest" in
+let query_manifest_cmd =
+  let doc = "query solo5 manifest" in
   Cmdliner.Term.(
-    pure hex_dump $ file,
+    pure query_manifest $ file,
     info ~doc "query-manifest")
 
 let () =
-  ignore (Cmdliner.Term.eval hex_dump_cmd)
+  ignore (Cmdliner.Term.eval query_manifest_cmd)
