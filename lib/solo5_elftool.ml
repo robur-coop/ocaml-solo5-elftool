@@ -3,19 +3,7 @@ type mft_type =
   | Dev_net_basic
   | Reserved_first
 
-let int_of_mft_type = function
-  | Dev_block_basic -> 1l
-  | Dev_net_basic -> 2l
-  | Reserved_first -> Int32.shift_left 1l 30
-
-let mft_type_of_int = function
-  | 1l -> Dev_block_basic
-  | 2l -> Dev_net_basic
-  | 1073741824l -> Reserved_first
-  | _ -> assert false
-
 type mft_entry =
-  | Reserved_first
   | Dev_block_basic of {
       name : string;
     }
@@ -25,12 +13,16 @@ type mft_entry =
 
 type mft = {
   version : int;
-  entries : mft_entry array;
+  entries : mft_entry list;
 }
 
+let mft_type_of_int : int32 -> mft_type = function
+  | 1l -> Dev_block_basic
+  | 2l -> Dev_net_basic
+  | 1073741824l -> Reserved_first
+  | _ -> assert false
+
 let pp_mft_entry ppf = function
-  | Reserved_first ->
-    Fmt.pf ppf "MFT_RESERVED_FIRST"
   | Dev_block_basic { name; _ } ->
     Fmt.pf ppf {|{@[<1>@ "name": %S,@ "type": "BLOCK_BASIC"@]@ }|} name
   | Dev_net_basic { name; _ } ->
@@ -39,53 +31,85 @@ let pp_mft_entry ppf = function
 let pp_mft ppf { version; entries } =
   Fmt.pf ppf
     {|{@[<1>@ "type": "solo5.manifest",@ "version": %d,@ "devices": [@[<1>@ %a@]@ ]@]@ }|}
-    version Fmt.(array ~sep:(append (any ",") sp) pp_mft_entry) entries
+    version Fmt.(list ~sep:(append (any ",") sp) pp_mft_entry) entries
+
+let ( let* ) = Result.bind
+let guard m b = if not b then Error (`Msg m) else Ok ()
 
 let sizeof_mft_entry = 104
+let mft_max_entries = 64l
 
 let parse_mft_entry buf =
-  assert (Cstruct.length buf = sizeof_mft_entry);
+  (* invariant: Cstruct.length buf = sizeof_mft_entry *)
   let name_raw = Cstruct.sub buf 0 68 in
   let typ = Cstruct.LE.get_uint32 buf 68 in
   let u = Cstruct.sub buf 72 16 in
   let b = Cstruct.sub buf 88 8 in
   let attached = Cstruct.get_uint8 buf 96 <> 0 in
-  let name =
+  let* name =
     Cstruct.cut ~sep:(Cstruct.create 1) name_raw
     |> Option.map (fun (name, _) -> Cstruct.to_string name)
+    |> Option.to_result ~none:(`Msg "unterminated device name")
   in
-  assert (Cstruct.for_all ((=) '\000') u);
-  assert (Cstruct.for_all ((=) '\000') b);
-  assert (not attached);
+  let* () = guard "non-zero mft_entry.u" (Cstruct.for_all ((=) '\000') u) in
+  let* () = guard "non-zero mft_entry.b" (Cstruct.for_all ((=) '\000') b) in
+  let* () = guard "non-zero mft_entry.attached" (not attached) in
   match mft_type_of_int typ with
   | Reserved_first ->
-    assert (Cstruct.for_all ((=) '\000') name_raw);
-    Reserved_first
+    let* () = guard "non-zero RESERVED_FIRST" (Cstruct.for_all ((=) '\000') name_raw) in
+    Ok `Reserved_first
   | Dev_block_basic ->
-    let name = Option.get name in
-    Dev_block_basic { name; }
+    Ok (`Dev_block_basic name)
   | Dev_net_basic ->
-    let name = Option.get name in
-    Dev_net_basic { name; }
+    Ok (`Dev_net_basic name)
 
 let parse_mft buf =
   let buf = Cstruct.of_string buf in
+  let* () = guard "manifest too small"
+      (Cstruct.length buf >= 4 + 8 + sizeof_mft_entry)
+  in
   (* FIXME: explanation why solo5 adds this padding *)
   let buf = Cstruct.shift buf 4 in
   let version = Cstruct.LE.get_uint32 buf 0
   and entries = Cstruct.LE.get_uint32 buf 4
   in
-  assert (version = 1l);
-  let buf = Cstruct.shift buf 8 in
-  let entries =
-    Array.init (Int32.unsigned_to_int entries |> Option.get (* XXX: assume 64 bit *))
-      (fun i -> parse_mft_entry (Cstruct.sub buf (i * sizeof_mft_entry) sizeof_mft_entry))
+  let* () = guard "unsupported manifest version" (version = 1l) in
+  let* () = guard "zero manifest entries" (Int32.unsigned_compare entries 0l > 0) in
+  (* this implicitly checks [Int32.to_int entries > 0] *)
+  let* () = guard "too many manifest entries"
+      (Int32.unsigned_compare entries mft_max_entries <= 0)
   in
-  { version = Int32.to_int version; entries }
+  let entries = Int32.to_int entries in
+  let buf = Cstruct.shift buf 8 in
+  let* () = guard "unexpected note size"
+      (Cstruct.length buf = entries * sizeof_mft_entry)
+  in
+  let* () =
+    match parse_mft_entry (Cstruct.sub buf 0 sizeof_mft_entry) with
+    | Ok `Reserved_first -> Ok ()
+    | _ -> Error (`Msg "expected RESERVED_FIRST")
+  in
+  let buf = Cstruct.shift buf sizeof_mft_entry in
+  let entries =
+    Array.init (entries - 1)
+      (fun i -> Cstruct.sub buf (i * sizeof_mft_entry) sizeof_mft_entry)
+  in
+  let* entries =
+    Array.fold_left
+      (fun r buf ->
+         let* acc = r in
+         let* mft_entry = parse_mft_entry buf in
+         match mft_entry with
+         | `Dev_block_basic name -> Ok (Dev_block_basic { name } :: acc)
+         | `Dev_net_basic name -> Ok (Dev_net_basic { name } :: acc)
+         | `Reserved_first -> Error (`Msg "found RESERVED_FIRST not as first entry"))
+      (Ok [])
+      entries
+  in
+  Ok { version = Int32.to_int version; entries }
 
 let ( let* ) = Result.bind
 
-let mft_max_entries = 64
 let mft1_note_name = "Solo5"
 
 let query_manifest buf =
@@ -102,5 +126,5 @@ let query_manifest buf =
       ~expected_type:0x3154464d (* MFT1 *)
   in
   let desc = Owee_buf.Read.fixed_string cursor descsz in
-  assert (Owee_buf.at_end cursor);
-  Ok (parse_mft desc)
+  let* () = guard "extra data" (Owee_buf.at_end cursor) in
+  parse_mft desc
