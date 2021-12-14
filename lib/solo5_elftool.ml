@@ -105,7 +105,7 @@ let parse_mft buf =
          | `Reserved_first -> Error (`Msg "found RESERVED_FIRST not as first entry"))
       (Ok [])
       entries
-    |> List.rev
+    |> Result.map List.rev
   in
   Ok { version = Int32.to_int version; entries }
 
