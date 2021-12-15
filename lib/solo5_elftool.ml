@@ -4,12 +4,8 @@ type mft_type =
   | Reserved_first
 
 type mft_entry =
-  | Dev_block_basic of {
-      name : string;
-    }
-  | Dev_net_basic of {
-      name : string;
-    }
+  | Dev_block_basic of string
+  | Dev_net_basic of string
 
 type mft = {
   version : int;
@@ -23,9 +19,9 @@ let mft_type_of_int : int32 -> mft_type = function
   | _ -> assert false
 
 let pp_mft_entry ppf = function
-  | Dev_block_basic { name; _ } ->
+  | Dev_block_basic name ->
     Fmt.pf ppf {|{@[<1>@ "name": %S,@ "type": "BLOCK_BASIC"@]@ }|} name
-  | Dev_net_basic { name; _ } ->
+  | Dev_net_basic name ->
     Fmt.pf ppf {|{@[<1>@ "name": %S,@ "type": "NET_BASIC"@]@ }|} name
 
 let pp_mft ppf { version; entries } =
@@ -68,7 +64,10 @@ let parse_mft buf =
   let* () = guard "manifest too small"
       (Cstruct.length buf >= 4 + 8 + sizeof_mft_entry)
   in
-  (* FIXME: explanation why solo5 adds this padding *)
+  (* Solo5 defines a struct mft1_note consisting of the ELF note header
+   * followed by a struct mft for reading and writing the ELF note. The note
+   * header is 20 bytes long, so to get 8-byte alignment the note header is
+   * padded with 4 bytes. See {[solo5/mft_abi.h]}. *)
   let buf = Cstruct.shift buf 4 in
   let version = Cstruct.LE.get_uint32 buf 0
   and entries = Cstruct.LE.get_uint32 buf 4
@@ -79,6 +78,9 @@ let parse_mft buf =
   let* () = guard "too many manifest entries"
       (Int32.unsigned_compare entries mft_max_entries <= 0)
   in
+  (* We have checked that entries interpreted unsigned is between 0 and
+   * mft_max_entries, so this is safely equivalent to:
+   *   (Option.get (Int32.unsigned_to_int entries) *)
   let entries = Int32.to_int entries in
   let buf = Cstruct.shift buf 8 in
   let* () = guard "unexpected note size"
@@ -100,8 +102,8 @@ let parse_mft buf =
          let* acc = r in
          let* mft_entry = parse_mft_entry buf in
          match mft_entry with
-         | `Dev_block_basic name -> Ok (Dev_block_basic { name } :: acc)
-         | `Dev_net_basic name -> Ok (Dev_net_basic { name } :: acc)
+         | `Dev_block_basic name -> Ok (Dev_block_basic name :: acc)
+         | `Dev_net_basic name -> Ok (Dev_net_basic name :: acc)
          | `Reserved_first -> Error (`Msg "found RESERVED_FIRST not as first entry"))
       (Ok [])
       entries
