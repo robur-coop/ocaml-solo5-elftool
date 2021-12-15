@@ -16,14 +16,10 @@ build: [
 depends: [
   "ocaml"
   "dune" {>= "2.9"}
-  "owee"
+  "owee" {>= "0.4"}
   "cstruct"
   "fmt"
   "cmdliner"
-]
-
-pin-depends: [
-  ["owee.dev" "git+https://github.com/let-def/owee.git"]
 ]
 
 synopsis: "OCaml Solo5 elftool for querying solo5 manifests"
