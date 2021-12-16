@@ -12,11 +12,33 @@ type mft = {
   entries : mft_entry list;
 }
 
-let mft_type_of_int : int32 -> mft_type = function
-  | 1l -> Dev_block_basic
-  | 2l -> Dev_net_basic
-  | 1073741824l -> Reserved_first
-  | _ -> assert false
+type abi_target =
+  | Hvt
+  | Spt
+  | Virtio
+  | Muen
+  | Genode
+  | Xen
+
+type abi = {
+  target : abi_target;
+  version : int32;
+}
+
+let mft_type_of_int : int32 -> (mft_type, _) result = function
+  | 1l -> Ok Dev_block_basic
+  | 2l -> Ok Dev_net_basic
+  | 1073741824l -> Ok Reserved_first
+  | v -> Error (`Msg ("unknown manifest entry type: " ^ Int32.to_string v))
+
+let abi_target_of_int : int32 -> (abi_target, _) result = function
+  | 1l -> Ok Hvt
+  | 2l -> Ok Spt
+  | 3l -> Ok Virtio
+  | 4l -> Ok Muen
+  | 5l -> Ok Genode
+  | 6l -> Ok Xen
+  | v -> Error (`Msg ("unknown abi target: " ^ Int32.to_string v))
 
 let pp_mft_entry ppf = function
   | Dev_block_basic name ->
@@ -28,6 +50,19 @@ let pp_mft ppf { version; entries } =
   Fmt.pf ppf
     {|{@[<1>@ "type": "solo5.manifest",@ "version": %d,@ "devices": [@[<1>@ %a@]@ ]@]@ }|}
     version Fmt.(list ~sep:(append (any ",") sp) pp_mft_entry) entries
+
+let pp_abi_target ppf = function
+  | Hvt -> Format.fprintf ppf "hvt"
+  | Spt -> Format.fprintf ppf "spt"
+  | Virtio -> Format.fprintf ppf "virtio"
+  | Muen -> Format.fprintf ppf "muen"
+  | Genode -> Format.fprintf ppf "genode"
+  | Xen -> Format.fprintf ppf "xen"
+
+let pp_abi ppf { version; target } =
+  Fmt.pf ppf
+    {|{@[<1>@ "type": "solo5.abi",@ "target": "%a",@ "version": %lu@ @]@ }|}
+    pp_abi_target target version
 
 let ( let* ) = Result.bind
 let guard m b = if not b then Error (`Msg m) else Ok ()
@@ -50,7 +85,8 @@ let parse_mft_entry buf =
   let* () = guard "non-zero mft_entry.u" (Cstruct.for_all ((=) '\000') u) in
   let* () = guard "non-zero mft_entry.b" (Cstruct.for_all ((=) '\000') b) in
   let* () = guard "non-zero mft_entry.attached" (not attached) in
-  match mft_type_of_int typ with
+  let* typ = mft_type_of_int typ in
+  match typ with
   | Reserved_first ->
     let* () = guard "non-zero RESERVED_FIRST" (Cstruct.for_all ((=) '\000') name_raw) in
     Ok `Reserved_first
@@ -111,9 +147,24 @@ let parse_mft buf =
   in
   Ok { version = Int32.to_int version; entries }
 
+let parse_abi buf =
+  let buf = Cstruct.of_string buf in
+  let* () = guard "abi manifest size mismatch" (Cstruct.length buf = 4 * 4) in
+  let target = Cstruct.LE.get_uint32 buf 0 in
+  let version = Cstruct.LE.get_uint32 buf 4 in
+  let reserved0 = Cstruct.LE.get_uint32 buf 8 in
+  let reserved1 = Cstruct.LE.get_uint32 buf 12 in
+  let* target = abi_target_of_int target in
+  let* () = guard "non-zero reserved0" (reserved0 = 0l) in
+  let* () = guard "non-zero reserved1" (reserved1 = 0l) in
+  (* XXX: should we check version = 1l ? *)
+  Ok { target; version }
+
 let ( let* ) = Result.bind
 
-let mft1_note_name = "Solo5"
+let note_name = "Solo5"
+let typ_mft1 = 0x3154464d
+let typ_abi1 = 0x31494241
 
 let query_manifest buf =
   let _header, sections = Owee_elf.read_elf buf in
@@ -125,9 +176,26 @@ let query_manifest buf =
   let cursor = Owee_buf.cursor body in
   let descsz =
     Owee_elf_notes.read_desc_size cursor
-      ~expected_owner:mft1_note_name
-      ~expected_type:0x3154464d (* MFT1 *)
+      ~expected_owner:note_name
+      ~expected_type:typ_mft1
   in
   let desc = Owee_buf.Read.fixed_string cursor descsz in
   let* () = guard "extra data" (Owee_buf.at_end cursor) in
   parse_mft desc
+
+let query_abi buf =
+  let _header, sections = Owee_elf.read_elf buf in
+  let* section =
+    Owee_elf.find_section sections ".note.solo5.abi"
+    |> Option.to_result ~none:(`Msg "section .note.solo5.abi not found")
+  in
+  let body = Owee_elf.section_body buf section in
+  let cursor = Owee_buf.cursor body in
+  let descsz =
+    Owee_elf_notes.read_desc_size cursor
+      ~expected_owner:note_name
+      ~expected_type:typ_abi1
+  in
+  let desc = Owee_buf.Read.fixed_string cursor descsz in
+  let* () = guard "extra data" (Owee_buf.at_end cursor) in
+  parse_abi desc
