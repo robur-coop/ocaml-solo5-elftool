@@ -166,7 +166,7 @@ let note_name = "Solo5"
 let typ_mft1 = 0x3154464d
 let typ_abi1 = 0x31494241
 
-let query_manifest buf =
+let query_manifest_exn buf =
   let _header, sections = Owee_elf.read_elf buf in
   let* section =
     Owee_elf.find_section sections ".note.solo5.manifest"
@@ -183,7 +183,12 @@ let query_manifest buf =
   let* () = guard "extra data" (Owee_buf.at_end cursor) in
   parse_mft desc
 
-let query_abi buf =
+let query_manifest buf =
+  try query_manifest_exn buf with
+  | Out_of_memory -> raise Out_of_memory
+  | e -> Error (`Msg ("query manifest failure: " ^ Printexc.to_string e))
+
+let query_abi_exn buf =
   let _header, sections = Owee_elf.read_elf buf in
   let* section =
     Owee_elf.find_section sections ".note.solo5.abi"
@@ -199,3 +204,8 @@ let query_abi buf =
   let desc = Owee_buf.Read.fixed_string cursor descsz in
   let* () = guard "extra data" (Owee_buf.at_end cursor) in
   parse_abi desc
+
+let query_abi buf =
+  try query_abi_exn buf with
+  | Out_of_memory -> raise Out_of_memory
+  | e -> Error (`Msg ("query abi failure: " ^ Printexc.to_string e))

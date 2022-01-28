@@ -37,11 +37,7 @@ val pp_abi : Format.formatter -> abi -> unit
  * line tool {[solo5-elftool query-abi]}. *)
 
 val query_manifest : Owee_buf.t -> (mft, [> `Msg of string ]) result
-(** [query_manifest buf] is the solo5 manifest of [buf], or an error message.
-
-    @raise Owee_buf.Invalid_format if [buf] is not valid ELF format *)
+(** [query_manifest buf] is the solo5 manifest of [buf], or an error message. *)
 
 val query_abi : Owee_buf.t -> (abi, [> `Msg of string ]) result
-(** [query_abi buf] is the solo5 abi of [buf], or an error message.
-
-    @raise Owee_buf.Invalid_format if [buf] is not valid ELF format *)
+(** [query_abi buf] is the solo5 abi of [buf], or an error message. *)
