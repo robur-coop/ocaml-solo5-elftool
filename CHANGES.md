@@ -1,3 +1,7 @@
+## v0.3.0 (2022-01-28)
+
+* Exceptions from Owee are caught in `query_abi` and `query_manifest`
+
 ## v0.2.0 (2021-12-16)
 
 * Rename binary from solo5-elftool to osolo5-elftool so it can co-exist with
