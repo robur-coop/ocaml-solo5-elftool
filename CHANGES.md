@@ -1,3 +1,7 @@
+## v0.3.1 (2022-03-16)
+
+* Update to cmdliner 1.1.0
+
 ## v0.3.0 (2022-01-28)
 
 * Exceptions from Owee are caught in `query_abi` and `query_manifest`

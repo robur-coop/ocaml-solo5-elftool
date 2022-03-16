@@ -18,7 +18,7 @@ depends: [
   "owee" {>= "0.4"}
   "cstruct" {>= "6.0.0"}
   "fmt" {>= "0.8.7"}
-  "cmdliner"
+  "cmdliner" {>= "1.1.0"}
 ]
 
 conflicts: [
