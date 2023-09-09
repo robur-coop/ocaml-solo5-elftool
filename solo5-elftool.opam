@@ -1,8 +1,8 @@
 opam-version: "2.0"
 homepage: "https://git.robur.io/robur/ocaml-solo5-elftool"
 dev-repo: "git+https://git.robur.io/robur/ocaml-solo5-elftool.git"
-bug-reports: "https://github.com/roburio/ocaml-solo5-elftool/issues"
-doc: "https://roburio.github.io/ocaml-solo5-elftool/doc"
+bug-reports: "https://github.com/robur-coop/ocaml-solo5-elftool/issues"
+doc: "https://robur-coop.github.io/ocaml-solo5-elftool/doc"
 maintainer: [ "team@robur.coop" ]
 authors: [ "Reynir Björnsson <reynir@reynir.dk>" ]
 license: "BSD-2-Clause"
