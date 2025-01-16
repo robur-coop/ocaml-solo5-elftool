@@ -30,3 +30,4 @@ description: """
 OCaml Solo5 elftool is a library and executable for reading solo5 device
 manifests from solo5 ELF executables.
 """
+x-maintenance-intent: [ "(latest)" ]
