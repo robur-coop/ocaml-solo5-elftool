@@ -16,22 +16,24 @@ let file =
 
 let query_manifest_cmd =
   let doc = "query solo5 manifest" in
-  Cmdliner.Term.(
-    pure query_manifest $ file,
-    info ~doc "query-manifest")
+  Cmdliner.Cmd.v
+    (Cmdliner.Cmd.info ~doc "query-manifest")
+    Cmdliner.Term.(const query_manifest $ file)
 
 let query_abi_cmd =
   let doc = "query solo5 abi" in
-  Cmdliner.Term.(
-    pure query_abi $ file,
-    info ~doc "query-abi")
+  Cmdliner.Cmd.v
+    (Cmdliner.Cmd.info ~doc "query-abi")
+    Cmdliner.Term.(const query_abi $ file)
 
 let default_cmd =
-  Cmdliner.Term.(
-    ret (pure (fun man_format -> `Help (man_format, None)) $ man_format),
-    info "osolo5-elftool")
+  let open Cmdliner.Term in
+  ret (const (fun man_format -> `Help (man_format, None)) $ Cmdliner.Arg.man_format)
 
 let () =
-  ignore (Cmdliner.Term.eval_choice
-            default_cmd
-            [query_manifest_cmd; query_abi_cmd])
+  let cmd =
+    Cmdliner.Cmd.group ~default:default_cmd
+       (Cmdliner.Cmd.info "osolo5-elftool")
+       [query_manifest_cmd; query_abi_cmd]
+  in
+  exit (Cmdliner.Cmd.eval cmd)
