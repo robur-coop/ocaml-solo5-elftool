@@ -160,52 +160,14 @@ let parse_abi buf =
   (* XXX: should we check version = 1l ? *)
   Ok { target; version }
 
-let ( let* ) = Result.bind
-
-let note_name = "Solo5"
-let typ_mft1 = 0x3154464d
-let typ_abi1 = 0x31494241
-
-let query_manifest_exn buf =
-  let _header, sections = Owee_elf.read_elf buf in
-  let* section =
-    Owee_elf.find_section sections ".note.solo5.manifest"
-    |> Option.to_result ~none:(`Msg "section .note.solo5.manifest not found")
-  in
-  let body = Owee_elf.section_body buf section in
-  let cursor = Owee_buf.cursor body in
-  let descsz =
-    Owee_elf_notes.read_desc_size cursor
-      ~expected_owner:note_name
-      ~expected_type:typ_mft1
-  in
-  let desc = Owee_buf.Read.fixed_string cursor descsz in
-  let* () = guard "extra data" (Owee_buf.at_end cursor) in
-  parse_mft desc
-
 let query_manifest buf =
-  try query_manifest_exn buf with
-  | Out_of_memory -> raise Out_of_memory
-  | e -> Error (`Msg ("query manifest failure: " ^ Printexc.to_string e))
-
-let query_abi_exn buf =
-  let _header, sections = Owee_elf.read_elf buf in
-  let* section =
-    Owee_elf.find_section sections ".note.solo5.abi"
-    |> Option.to_result ~none:(`Msg "section .note.solo5.abi not found")
-  in
-  let body = Owee_elf.section_body buf section in
-  let cursor = Owee_buf.cursor body in
-  let descsz =
-    Owee_elf_notes.read_desc_size cursor
-      ~expected_owner:note_name
-      ~expected_type:typ_abi1
-  in
-  let desc = Owee_buf.Read.fixed_string cursor descsz in
-  let* () = guard "extra data" (Owee_buf.at_end cursor) in
-  parse_abi desc
+  match Elf.find buf Elf.section_manifest Elf.typ_mft1 with
+  | None -> Error (`Msg "manifest not found")
+  | Some desc -> parse_mft desc
+  (*| exception Elf.Elf_error -> Error (`Msg "error during ELF parsing")*)
 
 let query_abi buf =
-  try query_abi_exn buf with
-  | Out_of_memory -> raise Out_of_memory
-  | e -> Error (`Msg ("query abi failure: " ^ Printexc.to_string e))
+  match Elf.find buf Elf.section_abi Elf.typ_abi1 with
+  | None -> Error (`Msg "manifest not found")
+  | Some desc -> parse_abi desc
+  (*| exception Elf.Elf_error -> Error (`Msg "error during ELF parsing")*)

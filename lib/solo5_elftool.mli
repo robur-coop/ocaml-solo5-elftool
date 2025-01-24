@@ -36,8 +36,8 @@ val pp_abi : Format.formatter -> abi -> unit
 (** Pretty-prints the manifest as JSON in a similar style as the Solo5 command
  * line tool {[solo5-elftool query-abi]}. *)
 
-val query_manifest : Owee_buf.t -> (mft, [> `Msg of string ]) result
+val query_manifest : string -> (mft, [> `Msg of string ]) result
 (** [query_manifest buf] is the solo5 manifest of [buf], or an error message. *)
 
-val query_abi : Owee_buf.t -> (abi, [> `Msg of string ]) result
+val query_abi : string -> (abi, [> `Msg of string ]) result
 (** [query_abi buf] is the solo5 abi of [buf], or an error message. *)

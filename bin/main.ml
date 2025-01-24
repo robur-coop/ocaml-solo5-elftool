@@ -1,13 +1,33 @@
+let read_binary file =
+  let ic = open_in_bin file in
+  let res = Buffer.create 16384 in
+  let buf = Bytes.create 16384 in
+  let rec loop () =
+    let len = input ic buf 0 16384 in
+    if len > 0 then
+      let () = Buffer.add_subbytes res buf 0 len in
+      loop ()
+  in
+  loop ();
+  close_in_noerr ic;
+  Buffer.contents res
+
 let query_manifest file =
-  Owee_buf.map_binary file
+  read_binary file
   |> Solo5_elftool.query_manifest
-  |> Result.iter (fun mft ->
-      Fmt.pr "%a\n" Solo5_elftool.pp_mft mft)
+  |> Result.fold
+    ~ok:(fun mft ->
+        Fmt.pr "%a\n" Solo5_elftool.pp_mft mft)
+    ~error:(fun (`Msg e) ->
+        Fmt.epr "%s\n" e)
 
 let query_abi file =
-  Owee_buf.map_binary file
+  read_binary file
   |> Solo5_elftool.query_abi
-  |> Result.iter (Fmt.pr "%a\n" Solo5_elftool.pp_abi)
+  |> Result.fold
+    ~ok:(fun abi -> Fmt.pr "%a\n" Solo5_elftool.pp_abi abi)
+    ~error:(fun (`Msg e) ->
+        Fmt.epr "%s\n" e)
 
 let file =
   let doc = "Solo5 executable" in
