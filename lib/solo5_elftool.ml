@@ -161,10 +161,12 @@ let query_manifest c =
   match Elf.find c Elf.section_manifest Elf.typ_mft1 with
   | None -> Error (`Msg "manifest not found")
   | Some desc -> parse_mft desc
-  (*| exception Elf.Elf_error -> Error (`Msg "error during ELF parsing")*)
+  | exception Elf.Elf_error | exception Cachet.Out_of_bounds _ ->
+    Error (`Msg "error during ELF parsing")
 
 let query_abi c =
   match Elf.find c Elf.section_abi Elf.typ_abi1 with
   | None -> Error (`Msg "manifest not found")
   | Some desc -> parse_abi desc
-  (*| exception Elf.Elf_error -> Error (`Msg "error during ELF parsing")*)
+  | exception Elf.Elf_error | exception Cachet.Out_of_bounds _ ->
+    Error (`Msg "error during ELF parsing")
