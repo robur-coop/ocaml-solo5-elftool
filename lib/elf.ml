@@ -1,3 +1,5 @@
+module Bstr = Cachet.Bstr
+
 exception Elf_error
 
 (* only the bits we care about *)
@@ -22,60 +24,61 @@ let typ_mft1 = 0x3154464d
 let typ_abi1 = 0x31494241
 
 let get_uint16 = function
-  | `LE -> String.get_uint16_le
-  | `BE -> String.get_uint16_be
+  | `LE -> Cachet.get_uint16_le
+  | `BE -> Cachet.get_uint16_be
 
 let get_uint32 en s off =
   let get = match en with
-    | `LE -> String.get_int32_le
-    | `BE -> String.get_int32_be
+    | `LE -> Cachet.get_int32_le
+    | `BE -> Cachet.get_int32_be
   in
   Int32.to_int (get s off) land 0xFFFF_FFFF
 
 let get_uint64 en s off =
   let get = match en with
-    | `LE -> String.get_int64_le
-    | `BE -> String.get_int64_be
+    | `LE -> Cachet.get_int64_le
+    | `BE -> Cachet.get_int64_be
   in
   match Int64.unsigned_to_int (get s off) with
   | None -> raise Elf_error
   | Some n -> n
 
-let c_string s off maxlen =
-  let rec scan_c_string i =
-    if String.length s < off + i || i = maxlen then
-      raise Elf_error
-    else if s.[i+off] = '\000' then
-      i
-    else
-      scan_c_string (succ i)
+let c_string seq maxlen =
+  let res = Buffer.create maxlen in
+  let rec scan i = function
+    | Seq.Nil -> raise Elf_error
+    | Seq.Cons (s, seq) ->
+      match String.index_opt s '\000' with
+      | None ->
+        let i = i + String.length s in
+        if i >= maxlen then
+          raise Elf_error;
+        Buffer.add_string res s;
+        scan i (seq ())
+      | Some l ->
+        let i = i + l in
+        if i >= maxlen then
+          raise Elf_error;
+        Buffer.add_substring res s 0 l;
+        Buffer.contents res
   in
-  String.sub s off (scan_c_string 0)
+  scan 0 (seq ())
 
-let read_magic s off =
-  if String.length s < off + 4 then
-    raise Elf_error;
-  let valid =
-    String.get_uint8 s off = 0x7f &&
-    s.[off+1] = 'E' && s.[off+2] = 'L' && s.[off+3] = 'F'
-  in
-  if not valid then
-    raise Elf_error;
-  off+4
+let read_magic c =
+  if not (Cachet.get_uint8 c 0 = 0x7f &&
+          String.equal (Cachet.get_string c ~len:3 1) "ELF")
+  then raise Elf_error
 
 let elfclass64 = 2
 
-let read_identification s off =
-  if String.length s < off + 12 then
-    raise Elf_error;
-  let elf_class = String.get_uint8 s off in
-  let elf_data = String.get_uint8 s (off+1) in
-  let _elf_version = String.get_uint8 s (off+2) in
-  let _elf_osabi = String.get_uint8 s (off+3) in
-  let _elf_abiversion = String.get_uint8 s (off+4) in
-  (* Check padding *)
-  for i = off + 5 to off+11 do
-    if s.[i] <> '\000' then
+let read_identification c =
+  let elf_class = Cachet.get_uint8 c 4 in
+  let elf_data = Cachet.get_uint8 c 5 in
+  let _elf_version = Cachet.get_uint8 c 6 in
+  let _elf_osabi = Cachet.get_uint8 c 7 in
+  let _elf_abiversion = Cachet.get_uint8 c 8 in
+  for i = 9 to 15 do
+    if Cachet.get_uint8 c i <> 0 then
       raise Elf_error
   done;
   (* we only support ELFCLASS64 *)
@@ -87,39 +90,33 @@ let read_identification s off =
     | 2 -> `BE
     | _ -> raise Elf_error
   in
-  endianness, off+12
+  endianness
 
-let read_header en s =
-  if String.length s < 16 + 48 then
-    raise Elf_error;
-  let e_shoff = get_uint32 en s 0x28 in
-  let e_shentsize = get_uint16 en s 0x3a in
-  let e_shnum = get_uint16 en s 0x3c in
-  let e_shstrndx = get_uint16 en s 0x3e in
+let read_header en c =
+  let e_shoff = get_uint32 en c 0x28 in
+  let e_shentsize = get_uint16 en c 0x3a in
+  let e_shnum = get_uint16 en c 0x3c in
+  let e_shstrndx = get_uint16 en c 0x3e in
   if Sys.int_size <= 32 then
     raise Elf_error;
   { e_shoff; e_shentsize; e_shnum; e_shstrndx }
 
-let read_section en s hdr i =
+let read_section en c hdr i =
   let off = hdr.e_shoff + i * hdr.e_shentsize in
-  if String.length s < off + 64 then
-    raise Elf_error;
-  let sh_name_off = get_uint32 en s off in
-  let sh_offset = get_uint64 en s (off + 24) in
-  let sh_size = get_uint64 en s (off + 32) in
+  let sh_name_off = get_uint32 en c off in
+  let sh_offset = get_uint64 en c (off + 24) in
+  let sh_size = get_uint64 en c (off + 32) in
   { sh_name_off; sh_offset; sh_size; sh_name = "" }
 
-let read_section_name shstrndx s section =
+let read_section_name shstrndx c section =
   let off = shstrndx.sh_offset + section.sh_name_off in
-  if String.length s < off + 1 then
-    raise Elf_error;
-  c_string s off (shstrndx.sh_size - section.sh_name_off)
+  c_string (Cachet.get_seq c off) (shstrndx.sh_size - section.sh_name_off)
 
-let read_sections en s hdr =
-  let sections = Array.init hdr.e_shnum (read_section en s hdr) in
+let read_sections en c hdr =
+  let sections = Array.init hdr.e_shnum (read_section en c hdr) in
   let shstrndx = sections.(hdr.e_shstrndx) in
   Array.map
-    (fun section -> { section with sh_name = read_section_name shstrndx s section })
+    (fun section -> { section with sh_name = read_section_name shstrndx c section })
     sections
 
 let find_section sections name =
@@ -127,39 +124,32 @@ let find_section sections name =
     (fun section -> String.equal section.sh_name name)
     sections
 
-let section_body s section =
-  if section.sh_offset < 0 || String.length s < section.sh_offset + section.sh_size then
+let desc en c section ~expected_owner ~expected_type =
+  let off = section.sh_offset in
+  if section.sh_size < 12 then
     raise Elf_error;
-  String.sub s section.sh_offset section.sh_size
-
-let desc en section_body ~expected_owner ~expected_type =
-  if String.length section_body < 12 then
-    raise Elf_error;
-  let namesz = get_uint32 en section_body 0 in
-  let descsz = get_uint32 en section_body 4
-  and typ = get_uint32 en section_body 8 in
-  if String.length section_body < 12 + namesz + descsz then
-    raise Elf_error;
+  let namesz = get_uint32 en c off
+  and descsz = get_uint32 en c (off + 4)
+  and typ = get_uint32 en c (off + 8) in
   if typ <> expected_type ||
      String.length expected_owner + 1 <> namesz ||
      not (String.equal
             (expected_owner ^ "\000")
-            (String.sub section_body 12 namesz))
+            (Cachet.get_string c (off+12) ~len:namesz))
   then
     None
   else
-    let off = 12 + namesz in
+    let off = off + 12 + namesz in
     (* padding *)
     let off = off + ((4 - (off land 3)) land 3) in
-    Some (String.sub section_body off descsz)
+    Some (Cachet.get_string c off ~len:descsz)
 
-let find s section_name typ =
-  let off = read_magic s 0 in
-  let en, _off = read_identification s off in
-  let hdr = read_header en s in
-  let sections = read_sections en s hdr in
+let find c section_name typ =
+  let () = read_magic c in
+  let en = read_identification c in
+  let hdr = read_header en c in
+  let sections = read_sections en c hdr in
   match find_section sections section_name with
   | None -> None
   | Some section ->
-    let body = section_body s section in
-    desc en body ~expected_owner:note_name ~expected_type:typ
+    desc en c section ~expected_owner:note_name ~expected_type:typ

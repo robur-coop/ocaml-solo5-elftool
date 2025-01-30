@@ -1,19 +1,18 @@
-let read_binary file =
-  let ic = open_in_bin file in
-  let res = Buffer.create 16384 in
-  let buf = Bytes.create 16384 in
-  let rec loop () =
-    let len = input ic buf 0 16384 in
-    if len > 0 then
-      let () = Buffer.add_subbytes res buf 0 len in
-      loop ()
+let map_binary file =
+  let fd = Unix.openfile file [Unix.O_RDONLY; Unix.O_CLOEXEC] 0 in
+  let stat = Unix.fstat fd in
+  let map () ~pos len =
+    let len = Int.min (stat.Unix.st_size - pos) len in
+    let pos = Int64.of_int pos in
+    let barr =
+      Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+    in
+    Bigarray.array1_of_genarray barr
   in
-  loop ();
-  close_in_noerr ic;
-  Buffer.contents res
+  Cachet.make ~map ()
 
 let query_manifest file =
-  read_binary file
+  map_binary file
   |> Solo5_elftool.query_manifest
   |> Result.fold
     ~ok:(fun mft ->
@@ -22,7 +21,7 @@ let query_manifest file =
         Fmt.epr "%s\n" e)
 
 let query_abi file =
-  read_binary file
+  map_binary file
   |> Solo5_elftool.query_abi
   |> Result.fold
     ~ok:(fun abi -> Fmt.pr "%a\n" Solo5_elftool.pp_abi abi)

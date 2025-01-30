@@ -160,14 +160,14 @@ let parse_abi buf =
   (* XXX: should we check version = 1l ? *)
   Ok { target; version }
 
-let query_manifest buf =
-  match Elf.find buf Elf.section_manifest Elf.typ_mft1 with
+let query_manifest c =
+  match Elf.find c Elf.section_manifest Elf.typ_mft1 with
   | None -> Error (`Msg "manifest not found")
   | Some desc -> parse_mft desc
   (*| exception Elf.Elf_error -> Error (`Msg "error during ELF parsing")*)
 
-let query_abi buf =
-  match Elf.find buf Elf.section_abi Elf.typ_abi1 with
+let query_abi c =
+  match Elf.find c Elf.section_abi Elf.typ_abi1 with
   | None -> Error (`Msg "manifest not found")
   | Some desc -> parse_abi desc
   (*| exception Elf.Elf_error -> Error (`Msg "error during ELF parsing")*)
