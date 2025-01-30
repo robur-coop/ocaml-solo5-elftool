@@ -9,6 +9,7 @@ let map_binary file =
     in
     Bigarray.array1_of_genarray barr
   in
+  at_exit (fun () -> Unix.close fd);
   Cachet.make ~map ()
 
 let query_manifest file =
