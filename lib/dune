@@ -1,4 +1,4 @@
 (library
  (public_name solo5-elftool)
  (name solo5_elftool)
- (libraries owee cachet fmt))
+ (libraries cachet fmt))

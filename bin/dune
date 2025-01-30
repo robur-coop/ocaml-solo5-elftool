@@ -1,4 +1,4 @@
 (executable
  (public_name osolo5-elftool)
  (name main)
- (libraries solo5-elftool owee cachet cmdliner))
+ (libraries solo5-elftool unix cachet cmdliner))
