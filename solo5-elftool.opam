@@ -20,6 +20,7 @@ depends: [
   "cmdliner" {>= "1.1.0"}
 ]
 
+available: arch != "arm32" & arch != "x86_32"
 conflicts: [
   "result" {< "1.5"}
 ]
