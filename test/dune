@@ -1,0 +1,8 @@
+(cram
+  (deps
+    %{bin:osolo5-elftool}
+    test_hello.hvt
+    test_hello.muen
+    test_hello.spt
+    test_hello.virtio
+    test_hello.xen))

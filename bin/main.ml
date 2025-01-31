@@ -1,13 +1,33 @@
+let map_binary file =
+  let fd = Unix.openfile file [Unix.O_RDONLY; Unix.O_CLOEXEC] 0 in
+  let stat = Unix.fstat fd in
+  let map () ~pos len =
+    let len = Int.min (stat.Unix.st_size - pos) len in
+    let pos = Int64.of_int pos in
+    let barr =
+      Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+    in
+    Bigarray.array1_of_genarray barr
+  in
+  at_exit (fun () -> Unix.close fd);
+  Cachet.make ~map ()
+
 let query_manifest file =
-  Owee_buf.map_binary file
+  map_binary file
   |> Solo5_elftool.query_manifest
-  |> Result.iter (fun mft ->
-      Fmt.pr "%a\n" Solo5_elftool.pp_mft mft)
+  |> Result.fold
+    ~ok:(fun mft ->
+        Fmt.pr "%a\n" Solo5_elftool.pp_mft mft)
+    ~error:(fun (`Msg e) ->
+        Fmt.epr "%s\n" e)
 
 let query_abi file =
-  Owee_buf.map_binary file
+  map_binary file
   |> Solo5_elftool.query_abi
-  |> Result.iter (Fmt.pr "%a\n" Solo5_elftool.pp_abi)
+  |> Result.fold
+    ~ok:(fun abi -> Fmt.pr "%a\n" Solo5_elftool.pp_abi abi)
+    ~error:(fun (`Msg e) ->
+        Fmt.epr "%s\n" e)
 
 let file =
   let doc = "Solo5 executable" in
