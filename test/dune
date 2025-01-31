@@ -1,0 +1,7 @@
+(cram
+  (deps
+    test_hello.hvt
+    test_hello.muen
+    test_hello.spt
+    test_hello.virtio
+    test_hello.xen))
