@@ -37,7 +37,7 @@ val pp_abi : Format.formatter -> abi -> unit
  * line tool {[solo5-elftool query-abi]}. *)
 
 val query_manifest : 'fd Cachet.t -> (mft, [> `Msg of string ]) result
-(** [query_manifest buf] is the solo5 manifest of [buf], or an error message. *)
+(** [query_manifest cachet] is the solo5 manifest of [cachet], or an error message. *)
 
 val query_abi : 'fd Cachet.t -> (abi, [> `Msg of string ]) result
-(** [query_abi buf] is the solo5 abi of [buf], or an error message. *)
+(** [query_abi cachet] is the solo5 abi of [cachet], or an error message. *)
