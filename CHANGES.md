@@ -1,3 +1,12 @@
+## v0.4.0 (2025-02-04)
+
+* Reimplement the necessary ELF parsing and drop the owee dependency. This makes it possible to use this library in Mirage.
+* **BREAKING**: Switch to cachet instead of requiring the whole binary in memory.
+
+## v0.3.1 (2022-03-16)
+
+* Update to cmdliner 1.1.0
+
 ## v0.3.0 (2022-01-28)
 
 * Exceptions from Owee are caught in `query_abi` and `query_manifest`
