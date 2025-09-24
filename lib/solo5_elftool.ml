@@ -170,3 +170,34 @@ let query_abi c =
   | Some desc -> parse_abi desc
   | exception Elf.Elf_error | exception Cachet.Out_of_bounds _ ->
     Error (`Msg "error during ELF parsing")
+
+type stream = Elf.state ref
+
+let stream () = ref (Elf.fresh_state ())
+
+let feed s data =
+  s := Elf.feed !s data
+
+let query_stream s : (_, [> `Msg of string | `Incomplete ]) result=
+  match !s with
+  | Elf.Fail (`Msg _ as e) -> Error e
+  | Elf.Done { abi; mft } ->
+    let ( let* ) = Result.bind in
+    let* abi = parse_abi abi in
+    let* mft = parse_mft mft in
+    Ok (abi, mft)
+  | Elf.Initial _ | Elf.Magic_ok _ | Elf.Identification_ok _ | Elf.Header_ok _
+  | Elf.Program_header_ok _ | Sections_without_name _ | Elf.Sections _  ->
+    Error `Incomplete
+
+let pp_state ppf s =
+  Fmt.string ppf (match !s with
+      | Elf.Initial _ -> "Initial"
+      | Elf.Magic_ok _ -> "Magic_ok"
+      | Elf.Identification_ok _ -> "Identification_ok"
+      | Elf.Header_ok _ -> "Header_ok"
+      | Elf.Program_header_ok _ -> "Program_header_ok"
+      | Elf.Sections_without_name _ -> "Sections_without_name"
+      | Elf.Sections _ -> "Sections"
+      | Elf.Done _ -> "Done"
+      | Elf.Fail _ -> "Fail")

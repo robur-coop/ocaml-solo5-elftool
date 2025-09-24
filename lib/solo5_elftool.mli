@@ -41,3 +41,11 @@ val query_manifest : 'fd Cachet.t -> (mft, [> `Msg of string ]) result
 
 val query_abi : 'fd Cachet.t -> (abi, [> `Msg of string ]) result
 (** [query_abi cachet] is the solo5 abi of [cachet], or an error message. *)
+
+type stream
+
+val stream : unit -> stream
+val feed : stream -> string -> unit
+val query_stream : stream -> (abi * mft, [> `Msg of string | `Incomplete ]) result
+
+val pp_state : stream Fmt.t

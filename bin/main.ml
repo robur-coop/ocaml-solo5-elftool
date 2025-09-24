@@ -29,6 +29,37 @@ let query_abi file =
     ~error:(fun (`Msg e) ->
         Fmt.epr "%s\n" e)
 
+let stream file =
+  let fd = Unix.openfile file [Unix.O_RDONLY; Unix.O_CLOEXEC] 0 in
+  let buf = Bytes.create 0x7ff in
+  let stream = Solo5_elftool.stream () in
+  let rec loop () =
+    let len = Unix.read fd buf 0 (Bytes.length buf) in
+    if len = 0 then
+      match Solo5_elftool.query_stream stream with
+      | Error `Msg e ->
+        Fmt.epr "%s\n%!" e
+      | Error `Incomplete ->
+        Fmt.epr "%a\n%!" Solo5_elftool.pp_state stream;
+        Fmt.epr "File read was incomplete\n%!"
+      | Ok (abi, mft) ->
+        Fmt.pr "%a\n%a\n%!"
+          Solo5_elftool.pp_abi abi
+          Solo5_elftool.pp_mft mft
+    else
+      let () = Solo5_elftool.feed stream (Bytes.sub_string buf 0 len) in
+      match Solo5_elftool.query_stream stream with
+      | Error `Msg e ->
+        Fmt.epr "Early: %s\n%!" e
+      | Ok (abi, mft) ->
+        Fmt.pr "Early: %a\n%a\n%!"
+          Solo5_elftool.pp_abi abi
+          Solo5_elftool.pp_mft mft
+      | Error `Incomplete ->
+        loop ()
+  in
+  loop ()
+
 let file =
   let doc = "Solo5 executable" in
   Cmdliner.Arg.(required & pos 0 (some file) None &
@@ -46,6 +77,12 @@ let query_abi_cmd =
     (Cmdliner.Cmd.info ~doc "query-abi")
     Cmdliner.Term.(const query_abi $ file)
 
+let stream_cmd =
+  let doc = "query solo5 abi & manifest in a streaming fashion" in
+  Cmdliner.Cmd.v
+    (Cmdliner.Cmd.info ~doc "stream")
+    Cmdliner.Term.(const stream $ file)
+
 let default_cmd =
   let open Cmdliner.Term in
   ret (const (fun man_format -> `Help (man_format, None)) $ Cmdliner.Arg.man_format)
@@ -54,6 +91,6 @@ let () =
   let cmd =
     Cmdliner.Cmd.group ~default:default_cmd
        (Cmdliner.Cmd.info "osolo5-elftool")
-       [query_manifest_cmd; query_abi_cmd]
+       [query_manifest_cmd; query_abi_cmd; stream_cmd]
   in
   exit (Cmdliner.Cmd.eval cmd)
