@@ -176,7 +176,8 @@ type stream = Elf.state ref
 let stream () = ref (Elf.fresh_state ())
 
 let feed s data =
-  s := Elf.feed !s data
+  try s := Elf.feed !s data with
+  | Elf.Elf_error -> s := Elf.Fail (`Msg "ELF error")
 
 let query_stream s : (_, [> `Msg of string | `Incomplete ]) result=
   match !s with
