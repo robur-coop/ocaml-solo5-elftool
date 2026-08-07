@@ -93,7 +93,7 @@ let read_identification c =
   endianness
 
 let read_header en c =
-  let e_shoff = get_uint32 en c 0x28 in
+  let e_shoff = get_uint64 en c 0x28 in
   let e_shentsize = get_uint16 en c 0x3a in
   let e_shnum = get_uint16 en c 0x3c in
   let e_shstrndx = get_uint16 en c 0x3e in
